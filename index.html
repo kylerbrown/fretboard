@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Five-String Banjo Fretboard Memorizer</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 1rem 1.5rem;
+      background: #1a1a1a;
+      color: #e0e0e0;
+    }
+    h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
+    .instructions {
+      color: #999;
+      font-size: 0.9rem;
+      margin-bottom: 1rem;
+    }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+    .controls label { display: flex; align-items: center; gap: 0.5rem; }
+    .controls select, .controls button {
+      padding: 0.4rem 0.75rem;
+      font-size: 1rem;
+      background: #333;
+      color: #e0e0e0;
+      border: 1px solid #555;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .controls button:hover { background: #444; }
+    .controls button:disabled { opacity: 0.6; cursor: not-allowed; }
+    [role="application"] {
+      overflow-x: auto;
+      padding-bottom: 0.5rem;
+    }
+    .fretboard {
+      display: inline-grid;
+      grid-template-columns: auto auto repeat(23, minmax(28px, 1fr));
+      grid-template-rows: repeat(7, 36px);
+      gap: 0;
+      background: linear-gradient(180deg, #2d2d2d 0%, #252525 100%);
+      border: 2px solid #444;
+      border-radius: 8px;
+      padding: 8px;
+      min-width: min(100%, 800px);
+    }
+    .string-label {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding-right: 8px;
+      font-size: 0.85rem;
+      color: #888;
+    }
+    .fret-label {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      color: #666;
+    }
+    .fretboard .cell {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 28px;
+      min-height: 32px;
+      background: #333;
+      border: 1px solid #444;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      color: #888;
+      transition: background 0.15s, color 0.15s;
+    }
+    .fretboard .cell:hover:not(.revealed) { background: #404040; color: #aaa; }
+    .fretboard .cell.revealed { cursor: default; }
+    .fretboard .cell.revealed.correct {
+      background: #1a4d1a;
+      color: #a0e0a0;
+    }
+    .fretboard .cell.revealed.incorrect {
+      background: #4d2a2a;
+      color: #e0a0a0;
+    }
+    .fretboard .cell.revealed:not(.correct):not(.incorrect) {
+      background: #3a3a3a;
+      color: #c0c0c0;
+    }
+    .fretboard .cell.short-string-unused {
+      background: #2a2a2a;
+      color: #555;
+      cursor: not-allowed;
+    }
+    .fretboard .cell.short-string-unused:hover { background: #2a2a2a; }
+    .open-label {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      color: #666;
+    }
+    .fretboard .open-note {
+      min-width: 44px;
+      padding: 0.25rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      background: #333;
+      color: #e0e0e0;
+      border: 1px solid #555;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .fretboard .open-note:hover { background: #404040; }
+    .position-marker {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 28px;
+      min-height: 24px;
+      background: transparent;
+      border: none;
+    }
+    .position-marker .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #666;
+    }
+    .position-marker.double {
+      gap: 6px;
+    }
+    .position-marker.double .dot {
+      width: 6px;
+      height: 6px;
+    }
+    .check-work-message {
+      margin-top: 0.75rem;
+      font-size: 1rem;
+      min-height: 1.5em;
+    }
+    .check-work-message.success {
+      color: #7cce7c;
+      font-weight: 600;
+    }
+    .check-work-message.partial {
+      color: #c0c0c0;
+    }
+  </style>
+</head>
+<body>
+  <h1>Five-String Banjo Fretboard Memorizer</h1>
+  <p class="instructions">
+    Pick a target note, then click fret positions to reveal the note. Green = target note, red = not the target.
+    Use “New round” to hide all notes again.
+  </p>
+  <div class="controls">
+    <label>
+      Find all
+      <select id="targetNote" aria-label="Target note to find">
+        <option value="">—</option>
+        <option value="C">C</option>
+        <option value="C#">C#</option>
+        <option value="Db">Db</option>
+        <option value="D">D</option>
+        <option value="D#">D#</option>
+        <option value="Eb">Eb</option>
+        <option value="E">E</option>
+        <option value="F">F</option>
+        <option value="F#">F#</option>
+        <option value="Gb">Gb</option>
+        <option value="G">G</option>
+        <option value="G#">G#</option>
+        <option value="Ab">Ab</option>
+        <option value="A">A</option>
+        <option value="A#">A#</option>
+        <option value="Bb">Bb</option>
+        <option value="B">B</option>
+      </select>
+      notes
+    </label>
+    <button type="button" id="resetBtn">New round</button>
+    <button type="button" id="checkWorkBtn">Check work</button>
+    <label>
+      Tuning
+      <select id="tuningPreset" aria-label="Tuning preset">
+        <option value="standard">Standard (gDGBD)</option>
+        <option value="ctuning">C tuning (gCGBD)</option>
+        <option value="doubleC">Double C (gCGCD)</option>
+        <option value="dtuning">D tuning (f#DF#AD)</option>
+        <option value="doubleD">Double D (aDADE)</option>
+      </select>
+    </label>
+    <label>
+      <input type="checkbox" id="useFlats" />
+      Use flats (e.g. Eb instead of D#)
+    </label>
+  </div>
+  <div role="application" aria-label="Banjo fretboard">
+    <div id="fretboard" class="fretboard"></div>
+    <p id="checkWorkMessage" class="check-work-message" aria-live="polite"></p>
+  </div>
+
+  <script>
+    (function () {
+      const CHROMATIC_SHARPS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+      const CHROMATIC_FLATS  = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
+      const SEMITONE_MAP = { C: 0, 'C#': 1, Db: 1, D: 2, 'D#': 3, Eb: 3, E: 4, F: 5, 'F#': 6, Gb: 6, G: 7, 'G#': 8, Ab: 8, A: 9, 'A#': 10, Bb: 10, B: 11 };
+      const NUM_FRETS = 22;
+      const TUNING_PRESETS = [
+        { id: 'standard', name: 'Standard (gDGBD)', notes: ['G', 'D', 'G', 'B', 'D'] },
+        { id: 'doubleD', name: 'Double D (aDADE)', notes: ['A', 'D', 'A', 'D', 'E'] },
+        { id: 'doubleC', name: 'Double C (gCGCD)', notes: ['G', 'C', 'G', 'C', 'D'] },
+        { id: 'dtuning', name: 'D tuning (f#DF#AD)', notes: ['F#', 'D', 'F#', 'A', 'D'] },
+        { id: 'ctuning', name: 'C tuning (gCGBD)', notes: ['G', 'C', 'G', 'B', 'D'] }
+      ];
+      let TUNING = ['G', 'D', 'G', 'B', 'D'];
+
+      function getNoteSharp(stringIndex, fret) {
+        if (stringIndex === 0) {
+          if (fret < 5) return null;
+          const openSemitone = SEMITONE_MAP[TUNING[0]];
+          const semitone = (openSemitone + (fret - 5)) % 12;
+          return CHROMATIC_SHARPS[semitone];
+        }
+        const openSemitone = SEMITONE_MAP[TUNING[stringIndex]];
+        const semitone = (openSemitone + fret) % 12;
+        return CHROMATIC_SHARPS[semitone];
+      }
+
+      function getNoteFlat(stringIndex, fret) {
+        if (stringIndex === 0) {
+          if (fret < 5) return null;
+          const openSemitone = SEMITONE_MAP[TUNING[0]];
+          const semitone = (openSemitone + (fret - 5)) % 12;
+          return CHROMATIC_FLATS[semitone];
+        }
+        const openSemitone = SEMITONE_MAP[TUNING[stringIndex]];
+        const semitone = (openSemitone + fret) % 12;
+        return CHROMATIC_FLATS[semitone];
+      }
+
+      function getNote(stringIndex, fret, useFlats) {
+        return useFlats ? getNoteFlat(stringIndex, fret) : getNoteSharp(stringIndex, fret);
+      }
+
+      function isShortStringUnused(stringIndex, fret) {
+        return stringIndex === 0 && fret <= 4;
+      }
+
+      const fretboardEl = document.getElementById('fretboard');
+      const targetSelect = document.getElementById('targetNote');
+      const resetBtn = document.getElementById('resetBtn');
+      const tuningPresetEl = document.getElementById('tuningPreset');
+      const useFlatsCheckbox = document.getElementById('useFlats');
+
+      const OPEN_NOTE_OPTIONS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
+      function useFlats() { return useFlatsCheckbox.checked; }
+
+      function buildFretboard() {
+        fretboardEl.innerHTML = '';
+        fretboardEl.appendChild(document.createElement('div'));
+        const openHeader = document.createElement('div');
+        openHeader.className = 'open-label';
+        openHeader.textContent = 'Open';
+        fretboardEl.appendChild(openHeader);
+        for (let f = 0; f <= NUM_FRETS; f++) {
+          const lbl = document.createElement('div');
+          lbl.className = 'fret-label';
+          lbl.textContent = f === 0 ? 'O' : f;
+          fretboardEl.appendChild(lbl);
+        }
+        for (let s = 0; s < 5; s++) {
+          const stringNum = s + 1;
+          const stringIndex = 4 - s;
+          const stringLbl = document.createElement('div');
+          stringLbl.className = 'string-label';
+          stringLbl.textContent = stringNum;
+          fretboardEl.appendChild(stringLbl);
+          const openSelect = document.createElement('select');
+          openSelect.className = 'open-note';
+          openSelect.setAttribute('aria-label', 'Open string ' + stringNum + ' note');
+          openSelect.dataset.stringIndex = String(stringIndex);
+          OPEN_NOTE_OPTIONS.forEach(function (note) {
+            const opt = document.createElement('option');
+            opt.value = note;
+            opt.textContent = note;
+            if (note === TUNING[stringIndex]) opt.selected = true;
+            openSelect.appendChild(opt);
+          });
+          fretboardEl.appendChild(openSelect);
+          for (let f = 0; f <= NUM_FRETS; f++) {
+            const cell = document.createElement('button');
+            cell.type = 'button';
+            cell.className = 'cell';
+            const noteSharp = getNoteSharp(stringIndex, f);
+            const noteFlat = getNoteFlat(stringIndex, f);
+            cell.dataset.noteSharp = noteSharp != null ? noteSharp : '';
+            cell.dataset.noteFlat = noteFlat != null ? noteFlat : '';
+            cell.dataset.string = String(stringNum);
+            cell.dataset.fret = String(f);
+            cell.dataset.stringIndex = String(stringIndex);
+            if (isShortStringUnused(stringIndex, f)) {
+              cell.classList.add('short-string-unused');
+              cell.disabled = true;
+              cell.textContent = '';
+              cell.setAttribute('aria-label', 'String ' + stringNum + ', fret ' + f + ' (not used on short string)');
+            } else {
+              cell.textContent = '?';
+              cell.setAttribute('aria-label', 'String ' + stringNum + ', fret ' + f + ', click to reveal note');
+            }
+            fretboardEl.appendChild(cell);
+          }
+        }
+        const MARKER_FRETS = [3, 5, 7, 10, 12, 15, 17, 19];
+        fretboardEl.appendChild(document.createElement('div'));
+        fretboardEl.appendChild(document.createElement('div'));
+        for (let f = 0; f <= NUM_FRETS; f++) {
+          const markerCell = document.createElement('div');
+          markerCell.className = 'position-marker';
+          if (MARKER_FRETS.indexOf(f) !== -1) {
+            if (f === 12) {
+              markerCell.classList.add('double');
+              const d1 = document.createElement('span');
+              d1.className = 'dot';
+              const d2 = document.createElement('span');
+              d2.className = 'dot';
+              markerCell.appendChild(d1);
+              markerCell.appendChild(d2);
+            } else {
+              const dot = document.createElement('span');
+              dot.className = 'dot';
+              markerCell.appendChild(dot);
+            }
+          }
+          fretboardEl.appendChild(markerCell);
+        }
+      }
+
+      function getDisplayNote(cell) {
+        return useFlats() ? cell.dataset.noteFlat : cell.dataset.noteSharp;
+      }
+
+      function updateCell(cell) {
+        if (cell.disabled) return;
+        const revealed = cell.classList.contains('revealed');
+        if (!revealed) return;
+        const note = getDisplayNote(cell);
+        cell.textContent = note;
+        cell.classList.remove('correct', 'incorrect');
+        const target = targetSelect.value;
+        if (target && SEMITONE_MAP[target] !== undefined && SEMITONE_MAP[note] !== undefined) {
+          if (SEMITONE_MAP[target] === SEMITONE_MAP[note]) {
+            cell.classList.add('correct');
+          } else {
+            cell.classList.add('incorrect');
+          }
+        }
+      }
+
+      function revealCell(cell) {
+        if (cell.disabled) return;
+        if (cell.classList.contains('revealed')) {
+          cell.classList.remove('revealed', 'correct', 'incorrect');
+          cell.textContent = '?';
+          cell.setAttribute('aria-label', 'String ' + cell.dataset.string + ', fret ' + cell.dataset.fret + ', click to reveal note');
+          return;
+        }
+        cell.classList.add('revealed');
+        updateCell(cell);
+        cell.setAttribute('aria-label', 'String ' + cell.dataset.string + ', fret ' + cell.dataset.fret + ', ' + getDisplayNote(cell) + ', click to hide');
+      }
+
+      function resetAll() {
+        document.getElementById('checkWorkMessage').textContent = '';
+        document.getElementById('checkWorkMessage').className = 'check-work-message';
+        const cells = fretboardEl.querySelectorAll('.cell:not(.short-string-unused)');
+        cells.forEach(function (cell) {
+          cell.classList.remove('revealed', 'correct', 'incorrect');
+          cell.textContent = '?';
+          cell.setAttribute('aria-label', 'String ' + cell.dataset.string + ', fret ' + cell.dataset.fret + ', click to reveal note');
+        });
+      }
+
+      function checkWork() {
+        const msgEl = document.getElementById('checkWorkMessage');
+        msgEl.textContent = '';
+        msgEl.className = 'check-work-message';
+        const target = targetSelect.value;
+        if (target && SEMITONE_MAP[target] !== undefined) {
+          const targetCells = [];
+          fretboardEl.querySelectorAll('.cell:not(.short-string-unused)').forEach(function (cell) {
+            const note = getDisplayNote(cell);
+            if (SEMITONE_MAP[note] === SEMITONE_MAP[target]) {
+              targetCells.push(cell);
+            }
+          });
+          const alreadyFound = targetCells.filter(function (cell) { return cell.classList.contains('revealed'); }).length;
+          const total = targetCells.length;
+          targetCells.forEach(function (cell) {
+            if (!cell.classList.contains('revealed')) {
+              cell.classList.add('revealed');
+              updateCell(cell);
+              cell.setAttribute('aria-label', 'String ' + cell.dataset.string + ', fret ' + cell.dataset.fret + ', ' + getDisplayNote(cell) + ', click to hide');
+            }
+          });
+          if (total > 0) {
+            msgEl.textContent = alreadyFound === total
+              ? 'You found all ' + total + ' ' + target + ' notes! Well done!'
+              : 'You found ' + alreadyFound + ' of ' + total + ' ' + target + ' notes.';
+            msgEl.classList.add(alreadyFound === total ? 'success' : 'partial');
+          }
+        } else {
+          fretboardEl.querySelectorAll('.cell:not(.short-string-unused)').forEach(function (cell) {
+            if (!cell.classList.contains('revealed')) {
+              cell.classList.add('revealed');
+              updateCell(cell);
+              cell.setAttribute('aria-label', 'String ' + cell.dataset.string + ', fret ' + cell.dataset.fret + ', ' + getDisplayNote(cell) + ', click to hide');
+            }
+          });
+        }
+      }
+
+      fretboardEl.addEventListener('click', function (e) {
+        const cell = e.target.closest('.cell');
+        if (!cell || cell.disabled) return;
+        revealCell(cell);
+      });
+
+      function refreshAllCellNotes() {
+        fretboardEl.querySelectorAll('.cell').forEach(function (cell) {
+          const stringIndex = parseInt(cell.dataset.stringIndex, 10);
+          const fret = parseInt(cell.dataset.fret, 10);
+          const noteSharp = getNoteSharp(stringIndex, fret);
+          const noteFlat = getNoteFlat(stringIndex, fret);
+          cell.dataset.noteSharp = noteSharp != null ? noteSharp : '';
+          cell.dataset.noteFlat = noteFlat != null ? noteFlat : '';
+          if (cell.classList.contains('revealed')) updateCell(cell);
+        });
+      }
+
+      function syncOpenDropdowns() {
+        fretboardEl.querySelectorAll('.open-note').forEach(function (sel) {
+          const stringIndex = parseInt(sel.dataset.stringIndex, 10);
+          sel.value = TUNING[stringIndex];
+        });
+      }
+
+      tuningPresetEl.addEventListener('change', function () {
+        const preset = TUNING_PRESETS.find(function (p) { return p.id === tuningPresetEl.value; });
+        if (preset) {
+          TUNING = preset.notes.slice();
+          syncOpenDropdowns();
+          refreshAllCellNotes();
+        }
+      });
+
+      fretboardEl.addEventListener('change', function (e) {
+        const openSelect = e.target.closest('.open-note');
+        if (!openSelect) return;
+        const stringIndex = parseInt(openSelect.dataset.stringIndex, 10);
+        TUNING[stringIndex] = openSelect.value;
+        refreshAllCellNotes();
+      });
+
+      resetBtn.addEventListener('click', resetAll);
+      document.getElementById('checkWorkBtn').addEventListener('click', checkWork);
+      targetSelect.addEventListener('change', function () {
+        const val = targetSelect.value;
+        useFlatsCheckbox.checked = val.length > 0 && val.endsWith('b');
+        document.getElementById('checkWorkMessage').textContent = '';
+        document.getElementById('checkWorkMessage').className = 'check-work-message';
+        fretboardEl.querySelectorAll('.cell.revealed').forEach(updateCell);
+      });
+      useFlatsCheckbox.addEventListener('change', function () {
+        fretboardEl.querySelectorAll('.cell.revealed').forEach(updateCell);
+      });
+
+      buildFretboard();
+    })();
+  </script>
+</body>
+</html>
