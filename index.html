@@ -6,6 +6,24 @@
   <title>Five-String Banjo Fretboard Memorizer</title>
   <style>
     * { box-sizing: border-box; }
+    /* normalize form control appearance so custom backgrounds/colors render
+       consistently across browsers (Safari macOS/Chrome on macOS, Firefox) */
+    button, select, input {
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      appearance: none;
+      background-image: none;
+    }
+    /* Firefox adds an inner focus border/padding on buttons; remove it */
+    button::-moz-focus-inner { border: 0; padding: 0; }
+
+    /* normalize appearance for fretboard controls only (avoid global side-effects) */
+    .fretboard .cell, .fretboard .open-note {
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      appearance: none;
+      background-image: none;
+    }
     body {
       font-family: system-ui, -apple-system, sans-serif;
       max-width: 1200px;
@@ -157,12 +175,31 @@
     .check-work-message.partial {
       color: #c0c0c0;
     }
+    /* Default revealed state (when no specific degree applies) */
+    .fretboard .cell.revealed.not-in-scale {
+      background: #3d3535 !important;
+      color: #888 !important;
+    }
+    /* Degree color palette (ordered after default revealed rule so it overrides) */
+    .fretboard .cell.revealed.degree-1 { background: #5c3d6e !important; color: #d4b8e0 !important; }
+    .fretboard .cell.revealed.degree-2 { background: #3d5c6e !important; color: #b8d4e0 !important; }
+    .fretboard .cell.revealed.degree-3 { background: #3d6e5c !important; color: #b8e0d4 !important; }
+    .fretboard .cell.revealed.degree-4 { background: #5c6e3d !important; color: #d4e0b8 !important; }
+    .fretboard .cell.revealed.degree-5 { background: #6e5c3d !important; color: #e0d4b8 !important; }
+    .fretboard .cell.revealed.degree-6 { background: #6e3d5c !important; color: #e0b8d4 !important; }
+    .fretboard .cell.revealed.degree-7 { background: #4a3d6e !important; color: #c4b8e0 !important; }
+    .fretboard .cell.revealed.degree-8 { background: #3d4a6e !important; color: #b8c4e0 !important; }
+    .fretboard .cell.revealed.degree-9 { background: #3d6e4a !important; color: #b8e0c4 !important; }
+    .fretboard .cell.revealed.degree-10 { background: #6e4a3d !important; color: #e0c4b8 !important; }
+    .fretboard .cell.revealed.degree-11 { background: #6e3d4a !important; color: #e0b8c4 !important; }
+    .fretboard .cell.revealed.degree-12 { background: #4a6e3d !important; color: #c4e0b8 !important; }
+    /* debug label inside each fret cell when using the debug reveal button (removed) */
   </style>
 </head>
 <body>
   <h1>Five-String Banjo Fretboard Memorizer</h1>
   <p class="instructions">
-    Pick a target note, then click fret positions to reveal the note. Green = target note, red = not the target.
+    Pick a root note and mode (notes, scale, or arpeggio), then click fret positions to reveal the note. Green = target note in notes mode; colored by scale degree in scale/arpeggio mode.
     Use “New round” to hide all notes again.
   </p>
   <div class="controls">
@@ -188,10 +225,23 @@
         <option value="Bb">Bb</option>
         <option value="B">B</option>
       </select>
-      notes
+      <select id="modeSelect" aria-label="Mode: notes, scale, or arpeggio">
+        <option value="notes">notes</option>
+        <option value="major">Major (Ionian)</option>
+        <option value="minor">Minor (Aeolian)</option>
+        <option value="majorPentatonic">Major Pentatonic</option>
+        <option value="minorPentatonic">Minor Pentatonic</option>
+        <option value="arpeggioMajor">Major</option>
+        <option value="arpeggioMinor">Minor</option>
+        <option value="arpeggioMaj7">Maj7</option>
+        <option value="arpeggioDominant">Dominant</option>
+        <option value="arpeggioMin7">Min7</option>
+        <option value="arpeggioDim">Dim</option>
+        <option value="arpeggioHalfDim">HalfDim</option>
+      </select>
     </label>
     <button type="button" id="resetBtn">New round</button>
-    <button type="button" id="checkWorkBtn">Check work</button>
+  <button type="button" id="checkWorkBtn">Check work</button>
     <label>
       Tuning
       <select id="tuningPreset" aria-label="Tuning preset">
@@ -227,6 +277,34 @@
       ];
       let TUNING = ['G', 'D', 'G', 'B', 'D'];
 
+      const MODE_DEFS = {
+        notes: null,
+        major: [0, 2, 4, 5, 7, 9, 11],
+        minor: [0, 2, 3, 5, 7, 8, 10],
+        majorPentatonic: [0, 2, 4, 7, 9],
+        minorPentatonic: [0, 3, 5, 7, 10],
+        arpeggioMajor: [0, 4, 7],
+        arpeggioMinor: [0, 3, 7],
+        arpeggioMaj7: [0, 4, 7, 11],
+        arpeggioDominant: [0, 4, 7, 10],
+        arpeggioMin7: [0, 3, 7, 10],
+        arpeggioDim: [0, 3, 6, 9],
+        arpeggioHalfDim: [0, 3, 6, 10]
+      };
+
+      function getNoteInMode(rootSemitone, modeKey, noteSemitone) {
+        if (noteSemitone === undefined || noteSemitone === null) return { inScale: false };
+        if (modeKey === 'notes') {
+          return { inScale: noteSemitone === rootSemitone };
+        }
+        const offsets = MODE_DEFS[modeKey];
+        if (!offsets) return { inScale: false };
+        const offset = (noteSemitone - rootSemitone + 12) % 12;
+        const idx = offsets.indexOf(offset);
+        if (idx === -1) return { inScale: false };
+        return { inScale: true, degree: idx + 1 };
+      }
+
       function getNoteSharp(stringIndex, fret) {
         if (stringIndex === 0) {
           if (fret < 5) return null;
@@ -261,9 +339,15 @@
 
       const fretboardEl = document.getElementById('fretboard');
       const targetSelect = document.getElementById('targetNote');
+      const modeSelect = document.getElementById('modeSelect');
       const resetBtn = document.getElementById('resetBtn');
       const tuningPresetEl = document.getElementById('tuningPreset');
-      const useFlatsCheckbox = document.getElementById('useFlats');
+    const useFlatsCheckbox = document.getElementById('useFlats');
+
+      function removeDegreeClasses(cell) {
+        cell.classList.remove('correct', 'incorrect', 'not-in-scale');
+        for (let k = 1; k <= 12; k++) cell.classList.remove('degree-' + k);
+      }
 
       const OPEN_NOTE_OPTIONS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
@@ -359,21 +443,28 @@
         if (!revealed) return;
         const note = getDisplayNote(cell);
         cell.textContent = note;
-        cell.classList.remove('correct', 'incorrect');
+        removeDegreeClasses(cell);
+        const mode = modeSelect.value;
         const target = targetSelect.value;
-        if (target && SEMITONE_MAP[target] !== undefined && SEMITONE_MAP[note] !== undefined) {
-          if (SEMITONE_MAP[target] === SEMITONE_MAP[note]) {
-            cell.classList.add('correct');
-          } else {
-            cell.classList.add('incorrect');
+        const rootSemitone = target && SEMITONE_MAP[target] !== undefined ? SEMITONE_MAP[target] : null;
+        const noteSemitone = note && SEMITONE_MAP[note] !== undefined ? SEMITONE_MAP[note] : null;
+        if (mode === 'notes') {
+          if (target && noteSemitone !== null) {
+            if (rootSemitone === noteSemitone) cell.classList.add('correct');
+            else cell.classList.add('incorrect');
           }
+        } else if (rootSemitone !== null && MODE_DEFS[mode]) {
+          const result = getNoteInMode(rootSemitone, mode, noteSemitone);
+          if (result.inScale) cell.classList.add('degree-' + result.degree);
+          else cell.classList.add('not-in-scale');
         }
       }
 
       function revealCell(cell) {
         if (cell.disabled) return;
         if (cell.classList.contains('revealed')) {
-          cell.classList.remove('revealed', 'correct', 'incorrect');
+          cell.classList.remove('revealed');
+          removeDegreeClasses(cell);
           cell.textContent = '?';
           cell.setAttribute('aria-label', 'String ' + cell.dataset.string + ', fret ' + cell.dataset.fret + ', click to reveal note');
           return;
@@ -388,7 +479,8 @@
         document.getElementById('checkWorkMessage').className = 'check-work-message';
         const cells = fretboardEl.querySelectorAll('.cell:not(.short-string-unused)');
         cells.forEach(function (cell) {
-          cell.classList.remove('revealed', 'correct', 'incorrect');
+          cell.classList.remove('revealed');
+          removeDegreeClasses(cell);
           cell.textContent = '?';
           cell.setAttribute('aria-label', 'String ' + cell.dataset.string + ', fret ' + cell.dataset.fret + ', click to reveal note');
         });
@@ -398,14 +490,14 @@
         const msgEl = document.getElementById('checkWorkMessage');
         msgEl.textContent = '';
         msgEl.className = 'check-work-message';
+        const mode = modeSelect.value;
         const target = targetSelect.value;
-        if (target && SEMITONE_MAP[target] !== undefined) {
+        const rootSemitone = target && SEMITONE_MAP[target] !== undefined ? SEMITONE_MAP[target] : null;
+        if (mode === 'notes' && target && rootSemitone !== null) {
           const targetCells = [];
           fretboardEl.querySelectorAll('.cell:not(.short-string-unused)').forEach(function (cell) {
             const note = getDisplayNote(cell);
-            if (SEMITONE_MAP[note] === SEMITONE_MAP[target]) {
-              targetCells.push(cell);
-            }
+            if (SEMITONE_MAP[note] === rootSemitone) targetCells.push(cell);
           });
           const alreadyFound = targetCells.filter(function (cell) { return cell.classList.contains('revealed'); }).length;
           const total = targetCells.length;
@@ -420,6 +512,29 @@
             msgEl.textContent = alreadyFound === total
               ? 'You found all ' + total + ' ' + target + ' notes! Well done!'
               : 'You found ' + alreadyFound + ' of ' + total + ' ' + target + ' notes.';
+            msgEl.classList.add(alreadyFound === total ? 'success' : 'partial');
+          }
+        } else if (mode !== 'notes' && MODE_DEFS[mode] && rootSemitone !== null) {
+          const targetCells = [];
+          fretboardEl.querySelectorAll('.cell:not(.short-string-unused)').forEach(function (cell) {
+            const note = getDisplayNote(cell);
+            const noteSemitone = SEMITONE_MAP[note];
+            if (getNoteInMode(rootSemitone, mode, noteSemitone).inScale) targetCells.push(cell);
+          });
+          const alreadyFound = targetCells.filter(function (cell) { return cell.classList.contains('revealed'); }).length;
+          const total = targetCells.length;
+          targetCells.forEach(function (cell) {
+            if (!cell.classList.contains('revealed')) {
+              cell.classList.add('revealed');
+              updateCell(cell);
+              cell.setAttribute('aria-label', 'String ' + cell.dataset.string + ', fret ' + cell.dataset.fret + ', ' + getDisplayNote(cell) + ', click to hide');
+            }
+          });
+          if (total > 0) {
+            const label = mode.indexOf('arpeggio') === 0 ? 'arpeggio tones' : 'scale tones';
+            msgEl.textContent = alreadyFound === total
+              ? 'You found all ' + total + ' ' + label + '! Well done!'
+              : 'You found ' + alreadyFound + ' of ' + total + ' ' + label + '.';
             msgEl.classList.add(alreadyFound === total ? 'success' : 'partial');
           }
         } else {
@@ -477,9 +592,15 @@
 
       resetBtn.addEventListener('click', resetAll);
       document.getElementById('checkWorkBtn').addEventListener('click', checkWork);
+      
       targetSelect.addEventListener('change', function () {
         const val = targetSelect.value;
         useFlatsCheckbox.checked = val.length > 0 && val.endsWith('b');
+        document.getElementById('checkWorkMessage').textContent = '';
+        document.getElementById('checkWorkMessage').className = 'check-work-message';
+        fretboardEl.querySelectorAll('.cell.revealed').forEach(updateCell);
+      });
+      modeSelect.addEventListener('change', function () {
         document.getElementById('checkWorkMessage').textContent = '';
         document.getElementById('checkWorkMessage').className = 'check-work-message';
         fretboardEl.querySelectorAll('.cell.revealed').forEach(updateCell);
